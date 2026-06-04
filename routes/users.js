@@ -37,7 +37,7 @@ router.post('/signup', async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    users[email] = { name, email, passwordHash, preferences: preferences || [] };
+    users[email] = { name, email, passwordHash, preferences: preferences || [], readArticles: [], favoriteArticles: [] };
 
     return res.status(200).json({ message: 'User registered successfully' });
 });
