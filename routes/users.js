@@ -2,15 +2,19 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { users } = require('../data/store');
-const { authenticate, JWT_SECRET } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
+const { JWT_SECRET } = require('../config');
+const { isValidEmail, isValidPassword, isValidPreferences } = require('../utils/validation');
 
 const router = express.Router();
 
-// Validation helpers
-const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-const isValidPassword = (password) => password.length >= 6;
-const isValidPreferences = (preferences) =>
-    Array.isArray(preferences) && preferences.every((p) => typeof p === 'string');
+// Middleware: resolve logged-in user from token, attach to req
+const resolveUser = (req, res, next) => {
+    const user = users[req.user.email];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    req.resolvedUser = user;
+    next();
+};
 
 // POST /users/signup
 router.post('/signup', async (req, res) => {
@@ -19,30 +23,21 @@ router.post('/signup', async (req, res) => {
     if (!name || !email || !password) {
         return res.status(400).json({ error: 'name, email, and password are required' });
     }
-
     if (!isValidEmail(email)) {
         return res.status(400).json({ error: 'Invalid email format' });
     }
-
     if (!isValidPassword(password)) {
         return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
-
     if (preferences !== undefined && !isValidPreferences(preferences)) {
         return res.status(400).json({ error: 'preferences must be an array of strings' });
     }
-
     if (users[email]) {
         return res.status(400).json({ error: 'User already exists' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    users[email] = {
-        name,
-        email,
-        passwordHash,
-        preferences: preferences || []
-    };
+    users[email] = { name, email, passwordHash, preferences: preferences || [] };
 
     return res.status(200).json({ message: 'User registered successfully' });
 });
@@ -54,18 +49,12 @@ router.post('/login', async (req, res) => {
     if (!email || !password) {
         return res.status(400).json({ error: 'email and password are required' });
     }
-
     if (!isValidEmail(email)) {
         return res.status(400).json({ error: 'Invalid email format' });
     }
 
     const user = users[email];
-    if (!user) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
         return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -74,29 +63,20 @@ router.post('/login', async (req, res) => {
 });
 
 // GET /users/preferences
-router.get('/preferences', authenticate, (req, res) => {
-    const user = users[req.user.email];
-    if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-    }
-    return res.status(200).json({ preferences: user.preferences });
+router.get('/preferences', authenticate, resolveUser, (req, res) => {
+    return res.status(200).json({ preferences: req.resolvedUser.preferences });
 });
 
 // PUT /users/preferences
-router.put('/preferences', authenticate, (req, res) => {
+router.put('/preferences', authenticate, resolveUser, (req, res) => {
     const { preferences } = req.body;
-    const user = users[req.user.email];
-
-    if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-    }
 
     if (!isValidPreferences(preferences)) {
         return res.status(400).json({ error: 'preferences must be an array of strings' });
     }
 
-    user.preferences = preferences;
-    return res.status(200).json({ message: 'Preferences updated', preferences: user.preferences });
+    req.resolvedUser.preferences = preferences;
+    return res.status(200).json({ message: 'Preferences updated', preferences: req.resolvedUser.preferences });
 });
 
 module.exports = router;

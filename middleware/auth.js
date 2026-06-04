@@ -1,23 +1,21 @@
 const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = 'news_aggregator_secret';
+const { JWT_SECRET } = require('../config');
 
 function authenticate(req, res, next) {
     const authHeader = req.headers['authorization'];
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader?.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Unauthorized: no token provided' });
     }
 
-    const token = authHeader.split(' ')[1];
+    const [, token] = authHeader.split(' ');
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        req.user = decoded; // { email, name }
+        req.user = jwt.verify(token, JWT_SECRET);
         next();
-    } catch (err) {
+    } catch {
         return res.status(401).json({ error: 'Unauthorized: invalid token' });
     }
 }
 
-module.exports = { authenticate, JWT_SECRET };
+module.exports = { authenticate };
