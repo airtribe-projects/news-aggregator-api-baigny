@@ -16,4 +16,7 @@ const addArticle = (article) => {
     return id;
 };
 
-module.exports = { users, articles, addArticle };
+// News cache — key: query string, value: { articles: [...], fetchedAt: timestamp }
+const newsCache = {};
+
+module.exports = { users, articles, addArticle, newsCache };

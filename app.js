@@ -1,4 +1,6 @@
 const express = require('express');
+const { startCacheUpdater } = require('./services/cacheUpdater');
+
 const app = express();
 const port = 3000;
 
@@ -16,6 +18,7 @@ app.listen(port, (err) => {
         return console.log('Something bad happened', err);
     }
     console.log(`Server is listening on ${port}`);
+    startCacheUpdater();
 });
 
 module.exports = app;

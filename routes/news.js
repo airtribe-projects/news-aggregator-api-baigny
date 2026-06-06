@@ -1,21 +1,38 @@
 const express = require('express');
 const axios = require('axios');
 const { authenticate } = require('../middleware/auth');
-const { users, articles, addArticle } = require('../data/store');
-const { GNEWS_API_KEY, GNEWS_BASE_URL } = require('../config');
+const { users, articles, addArticle, newsCache } = require('../data/store');
+const { GNEWS_API_KEY, GNEWS_BASE_URL, CACHE_TTL_MS } = require('../config');
 
 const router = express.Router();
 
-// Helper: fetch from GNews and store articles, returns array with ids
-const fetchAndStoreNews = async (query) => {
+// Helper: fetch from GNews, store articles, update cache
+const fetchFromGNews = async (query) => {
     const { data } = await axios.get(GNEWS_BASE_URL, {
         params: { q: query, token: GNEWS_API_KEY, lang: 'en', max: 10 }
     });
 
-    return data.articles.map(({ title, description, url, publishedAt, source }) => {
+    const result = data.articles.map(({ title, description, url, publishedAt, source }) => {
         const id = addArticle({ title, description, url, publishedAt, source: source.name });
         return articles[id];
     });
+
+    newsCache[query] = { articles: result, fetchedAt: Date.now() };
+    return result;
+};
+
+// Helper: return cached articles if fresh, otherwise fetch from GNews
+const fetchAndStoreNews = async (query) => {
+    const cached = newsCache[query];
+    const isFresh = cached && (Date.now() - cached.fetchedAt) < CACHE_TTL_MS;
+
+    if (isFresh) {
+        console.log(`[cache HIT] query: "${query}"`);
+        return cached.articles;
+    }
+
+    console.log(`[cache MISS] query: "${query}" — fetching from GNews`);
+    return fetchFromGNews(query);
 };
 
 // GET /news - fetch news based on user preferences
