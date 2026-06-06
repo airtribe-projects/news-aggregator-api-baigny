@@ -1,0 +1,431 @@
+openapi: 3.0.3
+info:
+  title: News Aggregator API
+  description: >
+    A RESTful API that aggregates news from GNews based on user preferences,
+    with JWT authentication, article bookmarking, and in-memory caching.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+tags:
+  - name: Auth
+    description: User registration and login
+  - name: Preferences
+    description: Manage user news preferences
+  - name: News
+    description: Fetch, search, and bookmark news articles
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Article:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: Breaking News Title
+        description:
+          type: string
+          example: A short description of the article.
+        url:
+          type: string
+          format: uri
+          example: https://example.com/article
+        publishedAt:
+          type: string
+          format: date-time
+          example: "2024-01-01T12:00:00Z"
+        source:
+          type: string
+          example: Example News
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: email and password are required
+
+paths:
+  /users/signup:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  example: Clark Kent
+                email:
+                  type: string
+                  format: email
+                  example: clark@example.com
+                password:
+                  type: string
+                  minLength: 6
+                  example: secret123
+                preferences:
+                  type: array
+                  items:
+                    type: string
+                  example: [technology, sports]
+      responses:
+        "200":
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User registered successfully
+        "400":
+          description: Validation error or user already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /users/login:
+    post:
+      tags: [Auth]
+      summary: Log in and receive a JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: clark@example.com
+                password:
+                  type: string
+                  example: secret123
+      responses:
+        "200":
+          description: Login successful — returns JWT token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        "400":
+          description: Missing or invalid fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /users/preferences:
+    get:
+      tags: [Preferences]
+      summary: Get the current user's news preferences
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of user preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preferences:
+                    type: array
+                    items:
+                      type: string
+                    example: [technology, sports]
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    put:
+      tags: [Preferences]
+      summary: Update the current user's news preferences
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [preferences]
+              properties:
+                preferences:
+                  type: array
+                  items:
+                    type: string
+                  example: [movies, comics, games]
+      responses:
+        "200":
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Preferences updated
+                  preferences:
+                    type: array
+                    items:
+                      type: string
+                    example: [movies, comics, games]
+        "400":
+          description: Invalid preferences format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /news:
+    get:
+      tags: [News]
+      summary: Fetch news based on user preferences
+      description: >
+        Returns news articles matching the user's saved preferences.
+        Falls back to "general" if no preferences are set.
+        Results are cached for 5 minutes; a background job refreshes all cached
+        queries every 10 minutes.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of news articles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  news:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Article"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Failed to fetch news from upstream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /news/search/{keyword}:
+    get:
+      tags: [News]
+      summary: Search news by keyword
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: keyword
+          required: true
+          schema:
+            type: string
+          example: bitcoin
+      responses:
+        "200":
+          description: List of matching news articles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  news:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Article"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Failed to fetch news from upstream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /news/read:
+    get:
+      tags: [News]
+      summary: Get all articles marked as read by the current user
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of read articles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  readArticles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Article"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /news/favorites:
+    get:
+      tags: [News]
+      summary: Get all articles marked as favorite by the current user
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of favorite articles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  favoriteArticles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Article"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /news/{id}/read:
+    post:
+      tags: [News]
+      summary: Mark an article as read
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: Article marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Article marked as read
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: User or article not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /news/{id}/favorite:
+    post:
+      tags: [News]
+      summary: Mark an article as favorite
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: Article marked as favorite
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Article marked as favorite
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: User or article not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
