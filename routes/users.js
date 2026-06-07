@@ -16,8 +16,8 @@ const resolveUser = (req, res, next) => {
     next();
 };
 
-// POST /users/signup
-router.post('/signup', async (req, res) => {
+// POST /users/register
+router.post('/register', async (req, res) => {
     const { name, email, password, preferences } = req.body;
 
     if (!name || !email || !password) {
@@ -36,10 +36,13 @@ router.post('/signup', async (req, res) => {
         return res.status(400).json({ error: 'User already exists' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    users[email] = { name, email, passwordHash, preferences: preferences || [], readArticles: [], favoriteArticles: [] };
-
-    return res.status(200).json({ message: 'User registered successfully' });
+    try {
+        const passwordHash = await bcrypt.hash(password, 10);
+        users[email] = { name, email, passwordHash, preferences: preferences || [], readArticles: [], favoriteArticles: [] };
+        return res.status(201).json({ message: 'User registered successfully' });
+    } catch (err) {
+        return res.status(500).json({ error: 'Registration failed' });
+    }
 });
 
 // POST /users/login
@@ -53,13 +56,17 @@ router.post('/login', async (req, res) => {
         return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    const user = users[email];
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    try {
+        const user = users[email];
+        if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
 
-    const token = jwt.sign({ email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '1h' });
-    return res.status(200).json({ token });
+        const token = jwt.sign({ email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '1h' });
+        return res.status(200).json({ token });
+    } catch (err) {
+        return res.status(500).json({ error: 'Login failed' });
+    }
 });
 
 // GET /users/preferences
