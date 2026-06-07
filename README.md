@@ -10,13 +10,25 @@ A REST API that fetches news from GNews based on user preferences, with JWT auth
 npm install
 ```
 
+## Environment variables
+
+Copy `.env.example` to `.env` and fill in the values before starting:
+
+```
+JWT_SECRET=<long random string>
+GNEWS_API_KEY=<your GNews API key>
+PORT=3000          # optional, defaults to 3000
+```
+
 ## Run
 
 ```bash
-node app.js
+npm start
 ```
 
-Server runs on `http://localhost:3000`
+Server runs on `http://localhost:${PORT}` (default 3000).
+
+> **Note:** the data store is in-memory. All users, preferences, and article history are reset when the server restarts.
 
 ## Test
 
@@ -34,7 +46,7 @@ All protected routes require: `Authorization: Bearer <token>`
 
 | Method | Endpoint         | Description       | Auth |
 |--------|-----------------|-------------------|------|
-| POST   | /users/signup   | Register a user   | No   |
+| POST   | /users/register | Register a user   | No   |
 | POST   | /users/login    | Login, get token  | No   |
 
 ### Preferences
@@ -60,7 +72,7 @@ All protected routes require: `Authorization: Bearer <token>`
 ### Signup
 
 ```
-POST /users/signup
+POST /users/register
 ```
 ```json
 {

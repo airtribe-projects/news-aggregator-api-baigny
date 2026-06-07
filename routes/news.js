@@ -39,24 +39,28 @@ const fetchAndStoreNews = async (query) => {
 router.get('/', authenticate, async (req, res) => {
     try {
         const user = users[req.user.email];
-        const preferences = user?.preferences?.length > 0 ? user.preferences : ['general'];
-        const news = await fetchAndStoreNews(preferences.join(' OR '));
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        const validPrefs = user.preferences.map((p) => p.trim()).filter((p) => p.length > 0);
+        const query = validPrefs.length > 0 ? validPrefs.join(' OR ') : 'general';
+        const news = await fetchAndStoreNews(query);
         return res.status(200).json({ news });
     } catch (err) {
         const status = err.response?.status ?? 500;
-        const error = err.response?.data?.errors ?? 'Failed to fetch news';
+        const error = err.response?.data?.errors?.[0] ?? err.response?.data?.message ?? 'Failed to fetch news';
         return res.status(status).json({ error });
     }
 });
 
 // GET /news/search/:keyword - search news by keyword
 router.get('/search/:keyword', authenticate, async (req, res) => {
+    const keyword = req.params.keyword.trim();
+    if (!keyword) return res.status(400).json({ error: 'keyword must not be blank' });
     try {
-        const news = await fetchAndStoreNews(req.params.keyword);
+        const news = await fetchAndStoreNews(keyword);
         return res.status(200).json({ news });
     } catch (err) {
         const status = err.response?.status ?? 500;
-        const error = err.response?.data?.errors ?? 'Failed to fetch news';
+        const error = err.response?.data?.errors?.[0] ?? err.response?.data?.message ?? 'Failed to fetch news';
         return res.status(status).json({ error });
     }
 });
@@ -65,7 +69,7 @@ router.get('/search/:keyword', authenticate, async (req, res) => {
 router.get('/read', authenticate, (req, res) => {
     const user = users[req.user.email];
     if (!user) return res.status(404).json({ error: 'User not found' });
-    const readArticles = user.readArticles.map((id) => articles[id]).filter(Boolean);
+    const readArticles = (user.readArticles ?? []).map((id) => articles[id]).filter(Boolean);
     return res.status(200).json({ readArticles });
 });
 
@@ -73,7 +77,7 @@ router.get('/read', authenticate, (req, res) => {
 router.get('/favorites', authenticate, (req, res) => {
     const user = users[req.user.email];
     if (!user) return res.status(404).json({ error: 'User not found' });
-    const favoriteArticles = user.favoriteArticles.map((id) => articles[id]).filter(Boolean);
+    const favoriteArticles = (user.favoriteArticles ?? []).map((id) => articles[id]).filter(Boolean);
     return res.status(200).json({ favoriteArticles });
 });
 
@@ -82,8 +86,10 @@ router.post('/:id/read', authenticate, (req, res) => {
     const user = users[req.user.email];
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id < 1) return res.status(400).json({ error: 'id must be a positive integer' });
     if (!articles[id]) return res.status(404).json({ error: 'Article not found' });
+    if (!user.readArticles) user.readArticles = [];
     if (!user.readArticles.includes(id)) user.readArticles.push(id);
 
     return res.status(200).json({ message: 'Article marked as read' });
@@ -94,8 +100,10 @@ router.post('/:id/favorite', authenticate, (req, res) => {
     const user = users[req.user.email];
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id < 1) return res.status(400).json({ error: 'id must be a positive integer' });
     if (!articles[id]) return res.status(404).json({ error: 'Article not found' });
+    if (!user.favoriteArticles) user.favoriteArticles = [];
     if (!user.favoriteArticles.includes(id)) user.favoriteArticles.push(id);
 
     return res.status(200).json({ message: 'Article marked as favorite' });
