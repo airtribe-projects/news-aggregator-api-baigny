@@ -14,14 +14,14 @@ let token = '';
 
 // Auth tests
 
-tap.test('POST /users/signup', async (t) => { 
-    const response = await server.post('/users/signup').send(mockUser);
-    t.equal(response.status, 200);
+tap.test('POST /users/register', async (t) => {
+    const response = await server.post('/users/register').send(mockUser);
+    t.equal(response.status, 201);
     t.end();
 });
 
-tap.test('POST /users/signup with missing email', async (t) => {
-    const response = await server.post('/users/signup').send({
+tap.test('POST /users/register with missing email', async (t) => {
+    const response = await server.post('/users/register').send({
         name: mockUser.name,
         password: mockUser.password
     });

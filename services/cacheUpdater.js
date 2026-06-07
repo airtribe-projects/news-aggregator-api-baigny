@@ -21,16 +21,22 @@ const refreshQuery = async (query) => {
     }
 };
 
-// Periodically refresh all queries currently in the cache
+// Periodically refresh all queries currently in the cache.
+// Uses recursive setTimeout so the next cycle only begins after the current one
+// finishes, preventing overlapping requests when the API is slow.
 const startCacheUpdater = () => {
-    setInterval(async () => {
+    const runRefresh = async () => {
         const queries = Object.keys(newsCache);
-        if (queries.length === 0) return;
+        if (queries.length > 0) {
+            console.log(`[cache REFRESH] Running background refresh for ${queries.length} query(s)...`);
+            for (const query of queries) {
+                await refreshQuery(query);
+            }
+        }
+        setTimeout(runRefresh, CACHE_REFRESH_MS);
+    };
 
-        console.log(`[cache REFRESH] Running background refresh for ${queries.length} query(s)...`);
-        await Promise.all(queries.map(refreshQuery));
-    }, CACHE_REFRESH_MS);
-
+    setTimeout(runRefresh, CACHE_REFRESH_MS);
     console.log(`[cache REFRESH] Background updater started (interval: ${CACHE_REFRESH_MS / 1000}s)`);
 };
 
